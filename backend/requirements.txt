@@ -3,3 +3,4 @@ plumbum==1.8.3
 rpyc==6.0.0
 streamcontroller-plugin-tools==2.0.1
 tzlocal==5.2
+pytz==2025.2
