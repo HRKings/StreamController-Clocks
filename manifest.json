@@ -1,7 +1,7 @@
 {
-    "version": "1.0.0",
+    "version": "1.0.1",
     "thumbnail": "store/Thumbnail.png",
-    "id": "com_core447_Clocks",
+    "id": "com_hrkings_Clocks",
     "name": "Clocks",
     "descriptions": {
         "en_US": "Adds an analog and a digital clock."
@@ -13,7 +13,7 @@
     "minimum-app-version": "1.0.0",
     "app-version": "1.4.11-beta",
 
-    
+
     "description": "Adds an analog and a digital clock.",
     "short-description": "Add clock widgets"
 }
