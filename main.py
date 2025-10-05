@@ -32,9 +32,6 @@ import globals as gl
 from src.backend.DeckManagement.DeckController import DeckController
 from src.backend.PageManagement.Page import Page
 
-from AnalogClockGenerator import AnalogClockGenerator
-
-
 class TimezoneRow(Adw.ComboRow):
     __gtype_name__ = "TimezoneRow"
     __gsignals__ = {
