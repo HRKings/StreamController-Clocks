@@ -62,13 +62,13 @@ class TimezoneRow(Adw.ComboRow):
                 if zone.get_string() == self.selected:
                     self.set_selected(i)
                     return
-            
+
         if self.fallback is not None:
             for i, zone in enumerate(self.str_list):
                 if zone.get_string() == self.fallback:
                     self.set_selected(i)
                     return
-            
+
         self.set_selected(Gtk.INVALID_LIST_POSITION)
 
 
@@ -77,7 +77,7 @@ class TimezoneRow(Adw.ComboRow):
             self.emit("zone-changed", None) #idk how this could happen
 
         self.emit("zone-changed", self.str_list[self.get_selected()].get_string())
-        
+
 
 
 class TimeActionBase(ActionBase):
@@ -106,31 +106,6 @@ class TimeActionBase(ActionBase):
         timezone = pytz.timezone(self.settings.get("timezone", self.plugin_base.local_timezone))
         return datetime.now(timezone)
 
-
-class AnalogClock(TimeActionBase):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        
-        self.generator = AnalogClockGenerator(
-            hour_markings_width=9,
-            hour_hand_width=15,
-            minute_hand_width=11,
-            second_hand_width=6
-        )
-
-    def on_tick(self):
-        self.show()
-
-    def show(self):
-        now = self.get_current_time()
-        clock = self.generator.get_clock(
-            hour=now.hour,
-            minute=now.minute,
-            second=now.second
-        )
-        self.set_media(image=clock)
-
-
 class DigitalClock(TimeActionBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -139,7 +114,6 @@ class DigitalClock(TimeActionBase):
 
     def get_config_rows(self) -> list:
         rows = super().get_config_rows()
-        
 
         self.label_positions = [ItemListComboRowListItem("top", "Top"), ItemListComboRowListItem("center", "Center"), ItemListComboRowListItem("bottom", "Bottom")]
         self.label_position_row = ItemListComboRow(self.label_positions, title="Label position")
@@ -153,20 +127,22 @@ class DigitalClock(TimeActionBase):
             title=self.plugin_base.lm.get("actions.digital-clock.show-seconds")
         )
 
+        self.date_format = Adw.EntryRow(title="Date format")
+
         self.load_defaults()
 
+        self.date_format.connect("changed", self.on_date_format_changed)
         self.twenty_four_format_switch.connect("notify::active", self.on_twenty_four_format_switch_toggled)
         self.show_seconds_switch.connect("notify::active", self.on_show_seconds_switch_toggled)
         self.label_position_row.connect("notify::selected", self.on_label_position_changed)
 
-        return [self.twenty_four_format_switch, self.show_seconds_switch, self.label_position_row]
+        return rows + [self.twenty_four_format_switch, self.show_seconds_switch, self.date_format]
 
-        return rows + [self.twenty_four_format_switch, self.show_seconds_switch]
-    
     def load_defaults(self):
         settings = self.get_settings()
         self.twenty_four_format_switch.set_active(settings.get("twenty-four-format", True))
         self.show_seconds_switch.set_active(settings.get("show-seconds", False))
+        self.date_format.set_text(settings.get("date-format", "%d-%m-%Y"))
         self.label_position_row.set_selected_item_by_key(settings.get("label-position"), 1)
 
     def on_twenty_four_format_switch_toggled(self, *args):
@@ -182,17 +158,26 @@ class DigitalClock(TimeActionBase):
 
         self.show()
 
+    def on_date_format_changed(self, *args):
+        settings = self.get_settings()
+        settings["date-format"] = self.date_format.get_text()
+        self.set_settings(settings)
+
+        self.show()
+
     def on_label_position_changed(self, *args):
         settings = self.get_settings()
         settings["label-position"] = self.label_position_row.get_selected_item().key
         self.set_settings(settings)
+
         ## Clear
         self.set_top_label(None)
         self.set_center_label(None)
         self.set_bottom_label(None)
+
         # Show
         self.show()
-        
+
     def on_tick(self):
         self.show()
 
@@ -203,85 +188,33 @@ class DigitalClock(TimeActionBase):
         if label_position not in ["top", "center", "bottom"]:
             return
 
-        seperator = " " if self.points_visible else ":"
+        separator = " " if self.points_visible else ":"
         if settings.get("show-seconds", False):
-            seperator = ":"
+            separator = ":"
 
         now = self.get_current_time()
-        label = now.strftime(f"%H{seperator}%M")
+        label = now.strftime(f"%H{separator}%M")
         font_size = 18
 
         if settings.get("show-seconds", False):
-            label += now.strftime(f"{seperator}%S")
+            label += now.strftime(f"{separator}%S")
             font_size -= 4
 
         if settings.get("twenty-four-format", True):
             self.set_bottom_label(None)
         else:
-            label = now.strftime(f"%I{seperator}%M")
+            label = now.strftime(f"%I{separator}%M")
             self.set_bottom_label(now.strftime("%p"), font_size=font_size)
 
-        self.set_label(label, font_size=font_size, position=label_position)
-
-        self.points_visible = not self.points_visible
-
-
-class Date(TimeActionBase):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.has_configuration = True
-
-    def get_config_rows(self) -> list:
-        rows = super().get_config_rows()
-        
-        self.key_entry = Adw.EntryRow(title="Date time format")
-        self.label_positions = [
-            ItemListComboRowListItem("top", "Top"),
-            ItemListComboRowListItem("center", "Center"),
-            ItemListComboRowListItem("bottom", "Bottom")
-        ]
-        self.label_position_row = ItemListComboRow(self.label_positions, title="Label position")
-
-        self.load_config_values()
-
-        self.key_entry.connect("changed", self.on_key_entry_changed)
-        self.label_position_row.connect("notify::selected", self.on_label_position_changed)
-
-        return rows + [self.key_entry, self.label_position_row]
-    
-    def load_config_values(self):
-        settings = self.get_settings()
-        self.key_entry.set_text(settings.get("key", "%d-%m-%Y"))
-        self.label_position_row.set_selected_item_by_key(settings.get("label-position"), 1)
-
-    def on_key_entry_changed(self, *args):
-        settings = self.get_settings()
-        settings["key"] = self.key_entry.get_text()
-        self.set_settings(settings)
-        self.show()
-
-    def on_label_position_changed(self, *args):
-        settings = self.get_settings()
-        settings["label-position"] = self.label_position_row.get_selected_item().key
-        self.set_settings(settings)
-        self.set_top_label(None)
-        self.set_center_label(None)
-        self.set_bottom_label(None)
-        self.show()
-
-    def on_tick(self):
-        self.show()
-
-    def show(self):
-        settings = self.get_settings()
-        key = settings.get("key", "%d-%m-%Y")
+        date_format = settings.get("date-format", "%d-%m-%Y")
         label_position = settings.get("label-position", "center")
 
-        if label_position not in ["top", "center", "bottom"]:
-            return
+        date = self.get_current_time().strftime(date_format)
 
-        self.set_label(text=self.get_current_time().strftime(key), font_size=10, position=label_position)
+        label += f"\n{date}"
 
+        self.set_label(label, font_size=font_size, position=label_position)
+        self.points_visible = not self.points_visible
 
 class ClocksPlugin(PluginBase):
     def __init__(self):
@@ -296,19 +229,6 @@ class ClocksPlugin(PluginBase):
         self.local_timezone = self.backend.get_local_timezone()
 
         ## Register actions
-        self.analog_clock_holder = ActionHolder(
-            plugin_base=self,
-            action_base=AnalogClock,
-            action_id_suffix="AnalogClock",
-            action_name=self.lm.get("actions.analog-clock.name"),
-            action_support={
-                Input.Key: ActionInputSupport.SUPPORTED,
-                Input.Dial: ActionInputSupport.SUPPORTED,
-                Input.Touchscreen: ActionInputSupport.UNSUPPORTED
-            }
-        )
-        self.add_action_holder(self.analog_clock_holder)
-
         self.digital_clock_holder = ActionHolder(
             plugin_base=self,
             action_base=DigitalClock,
@@ -322,24 +242,11 @@ class ClocksPlugin(PluginBase):
         )
         self.add_action_holder(self.digital_clock_holder)
 
-        self.date_holder = ActionHolder(
-            plugin_base=self,
-            action_base=Date,
-            action_id_suffix="Date",
-            action_name="Date",
-            action_support={
-                Input.Key: ActionInputSupport.SUPPORTED,
-                Input.Dial: ActionInputSupport.UNTESTED,
-                Input.Touchscreen: ActionInputSupport.UNSUPPORTED
-            }
-        )
-        self.add_action_holder(self.date_holder)
-
         # Register plugin
         self.register(
             plugin_name=self.lm.get("plugin.name"),
-            github_repo="https://github.com/StreamController/Clocks",
-            plugin_version="1.0.0",
+            github_repo="https://github.com/HRKings/StreamController-Clocks",
+            plugin_version="1.0.1",
             app_version="1.0.0-alpha"
         )
 
